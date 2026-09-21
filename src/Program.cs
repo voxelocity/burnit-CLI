@@ -163,6 +163,8 @@ namespace Burnit
                     case "--no-finalise": o.NoFinalize = true; break;
                     case "--plain": o.Plain = true; break;
                     case "--theme": o.ThemeName = Next(args, ref i, "--theme"); break;
+                    case "--kawaii":
+                    case "--rave": o.ThemeName = "kawaii"; break;
                     case "--fs": o.FileSystems = ParseFs(Next(args, ref i, "--fs")); break;
                     case "-h":
                     case "--help": o.Command = "help"; break;
@@ -238,7 +240,8 @@ namespace Burnit
             Console.WriteLine("        --eject               eject when finished");
             Console.WriteLine("        --dry-run             do everything except fire the laser");
             Console.WriteLine("    -y, --yes                 do not ask for confirmation");
-            Console.WriteLine("        --theme <amber|ice|mono>");
+            Console.WriteLine("        --theme <amber|ice|mono|kawaii>");
+            Console.WriteLine("        --kawaii              rainbow rave mode. you asked for it");
             Console.WriteLine("        --plain               no animation, line output only");
             Console.WriteLine();
             Console.WriteLine("  " + col(t.Label, "EXAMPLES"));

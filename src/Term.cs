@@ -56,6 +56,44 @@ namespace Burnit
         {
             return Make((int)(((c >> 16) & 0xFF) * k), (int)(((c >> 8) & 0xFF) * k), (int)((c & 0xFF) * k));
         }
+
+        /// <summary>h wraps at 1.0; s and v are 0..1.</summary>
+        public static int FromHsv(double h, double s, double v)
+        {
+            h = h - Math.Floor(h);
+            if (s < 0) s = 0; if (s > 1) s = 1;
+            if (v < 0) v = 0; if (v > 1) v = 1;
+
+            double sector = h * 6.0;
+            int i = (int)Math.Floor(sector);
+            double f = sector - i;
+            double p = v * (1 - s);
+            double q = v * (1 - f * s);
+            double t = v * (1 - (1 - f) * s);
+            double r, g, b;
+            switch (i % 6)
+            {
+                case 0: r = v; g = t; b = p; break;
+                case 1: r = q; g = v; b = p; break;
+                case 2: r = p; g = v; b = t; break;
+                case 3: r = p; g = q; b = v; break;
+                case 4: r = t; g = p; b = v; break;
+                default: r = v; g = p; b = q; break;
+            }
+            return Make((int)(r * 255 + 0.5), (int)(g * 255 + 0.5), (int)(b * 255 + 0.5));
+        }
+
+        /// <summary>Cheap deterministic hash, for sparkle placement that does not flicker randomly.</summary>
+        public static double Hash(int x, int y, int z)
+        {
+            unchecked
+            {
+                int h = x * 374761393 + y * 668265263 + z * 1442695040;
+                h = (h ^ (h >> 13)) * 1274126177;
+                h = h ^ (h >> 16);
+                return (h & 0x7FFFFFF) / (double)0x7FFFFFF;
+            }
+        }
     }
 
     public sealed class Screen
@@ -99,6 +137,13 @@ namespace Burnit
             if (x < 0 || y < 0 || x >= Width || y >= Height) return;
             int i = y * Width + x;
             _ch[i] = c; _fg[i] = fg; _bg[i] = bg;
+        }
+
+        /// <summary>What is currently in a cell, so overlays can avoid clobbering it.</summary>
+        public char CharAt(int x, int y)
+        {
+            if (x < 0 || y < 0 || x >= Width || y >= Height) return '\0';
+            return _ch[y * Width + x];
         }
 
         public void Text(int x, int y, string s, int fg)
@@ -189,12 +234,17 @@ namespace Burnit
         public int Hot;          // the write spot itself
         public int Accent;       // headings, the one colour that carries the eye
 
+        /// <summary>Opt-in chaos. Off everywhere unless --kawaii is passed.</summary>
+        public bool Rave;
+
         public static Theme Get(string name)
         {
             switch ((name ?? "amber").ToLowerInvariant())
             {
                 case "ice": return Ice();
                 case "mono": return Mono();
+                case "kawaii":
+                case "rave": return Kawaii();
                 default: return Amber();
             }
         }
@@ -235,6 +285,24 @@ namespace Burnit
             t.Written = Rgb.Make(104, 104, 104);
             t.Hot = Rgb.Make(240, 240, 240);
             t.Accent = Rgb.Make(198, 198, 198);
+            return t;
+        }
+
+        public static Theme Kawaii()
+        {
+            Theme t = new Theme();
+            t.Name = "kawaii";
+            t.Rave = true;
+            t.Background = Rgb.Make(14, 8, 22);
+            t.Panel = Rgb.Make(186, 96, 200);
+            t.Label = Rgb.Make(126, 220, 232);
+            t.Value = Rgb.Make(255, 236, 250);
+            t.Dim = Rgb.Make(124, 92, 150);
+            t.Rim = Rgb.Make(226, 168, 244);
+            t.Unwritten = Rgb.Make(38, 24, 56);
+            t.Written = Rgb.Make(255, 96, 190);
+            t.Hot = Rgb.Make(255, 255, 255);
+            t.Accent = Rgb.Make(255, 130, 208);
             return t;
         }
     }

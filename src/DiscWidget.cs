@@ -104,6 +104,7 @@ namespace Burnit
                                  double front, double progress, double spin, double time)
         {
             if (u > OuterEdge || u < HoleR) return Rgb.None;
+            if (t.Rave) return ShadeRave(t, mode, u, theta, front, progress, spin, time);
 
             // Non-data furniture: outer rim, clamping area, hub ring.
             if (u >= RimInner) return Sheen(t.Rim, theta, spin, 0.22);
@@ -173,6 +174,66 @@ namespace Burnit
             double heat = warm + head;
             if (heat > 1.0) heat = 1.0;
             return Rgb.Lerp(dye, hot, heat);
+        }
+
+        // ---- rave mode ------------------------------------------------------------
+        // Everything the default theme deliberately avoids, all at once, on purpose.
+
+        private static int ShadeRave(Theme t, DiscMode mode, double u, double theta,
+                                     double front, double progress, double spin, double time)
+        {
+            double turn = theta / (Math.PI * 2.0);          // 0..1 around the disc
+            double beat = 0.5 + 0.5 * Math.Sin(time * 6.0); // a steady four-to-the-floor pulse
+            double strobe = 0.85 + 0.15 * Math.Sin(time * 18.0);
+
+            // Outer rim: a fast chase of hue around the edge.
+            if (u >= RimInner)
+                return Rgb.FromHsv(turn * 3.0 + time * 1.4, 0.85, (0.75 + 0.25 * beat) * strobe);
+
+            if (u > DataOuter)
+                return Rgb.FromHsv(turn * 2.0 - time * 0.9, 0.7, 0.45);
+
+            // Hub furniture: white-hot and pulsing.
+            if (u < HubOut && u >= HoleR)
+                return Rgb.FromHsv(time * 2.2, 0.35, 0.85 + 0.15 * beat);
+            if (u < ClampIn)
+                return Rgb.FromHsv(time * 1.1 + 0.5, 0.55, 0.35 + 0.25 * beat);
+            if (u < DataInner)
+                return Rgb.FromHsv(turn * 4.0 + time * 2.0, 0.75, 0.55 + 0.3 * beat);
+
+            // ---- data area ----
+            bool inside = u <= front;
+            if (mode == DiscMode.Reading || mode == DiscMode.Done) inside = true;
+            if (mode == DiscMode.Erasing) inside = !inside;
+
+            if (!inside)
+            {
+                // Unwritten dye: dark, with a slow scanning shimmer so it is not dead flat.
+                double shimmer = 0.12 + 0.10 * Math.Sin(theta * 8.0 - time * 3.0);
+                return Rgb.FromHsv(0.75 + 0.08 * Math.Sin(time * 0.7), 0.6, shimmer);
+            }
+
+            // Written: rainbow spiral, hue driven by angle and radius so it appears to turn.
+            double hue = turn * 2.0 + u * 2.4 - time * 0.85;
+            double val = (0.70 + 0.30 * Math.Sin(u * 30.0 - time * 7.0)) * strobe;
+            int c = Rgb.FromHsv(hue, 0.92, val);
+
+            // Rotating laser spokes sweeping over the written area.
+            double spoke = Math.Abs(Math.Sin((theta - time * 2.4) * 4.0));
+            if (spoke > 0.986)
+                c = Rgb.Lerp(c, Rgb.Make(255, 255, 255), (spoke - 0.986) / 0.014 * 0.8);
+
+            // The write head, still the thing that actually tracks progress.
+            double radial = 1.0 - Math.Abs(u - front) / 0.075;
+            if (radial > 0.0 && progress > 0.0005)
+            {
+                double behind = spin - theta;
+                behind = behind % (Math.PI * 2);
+                if (behind < 0) behind += Math.PI * 2;
+                double head = radial * Math.Exp(-behind / 0.55);
+                if (head > 0) c = Rgb.Lerp(c, Rgb.Make(255, 255, 255), Math.Min(1.0, head * 1.2));
+            }
+            return c;
         }
 
         /// <summary>A broad soft highlight rotating with the disc, so it reads as spinning.</summary>

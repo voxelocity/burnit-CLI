@@ -259,10 +259,11 @@ namespace Burnit
         {
             double t = (DateTime.UtcNow - _t0).TotalSeconds;
             DiscMode mode = _state.Mode;
+            double rate = _theme.Rave ? 2.1 : 1.0;
             if (mode == DiscMode.Writing || mode == DiscMode.Erasing || mode == DiscMode.Reading)
-                _spin += 0.30;
+                _spin += 0.30 * rate;
             else
-                _spin += 0.07;
+                _spin += 0.07 * rate;
 
             Theme th = _theme;
             _screen.Clear(th.Background);
@@ -272,8 +273,32 @@ namespace Burnit
             DrawPanel();
             DrawSteps();
             DrawProgressBar();
+            if (th.Rave) DrawSparkles(t);
 
             _screen.Flush(Console.Out);
+        }
+
+        /// <summary>Twinkles over empty cells only, so it never eats text or the disc.</summary>
+        private void DrawSparkles(double t)
+        {
+            const string glyphs = "*·°∙+˚";
+            int bucket = (int)(t * 6.0);
+            for (int y = 1; y < _boxH - 1; y++)
+            {
+                for (int x = 1; x < _boxW - 1; x++)
+                {
+                    // Blank neighbours too, or sparkles land in the gaps between words.
+                    if (_screen.CharAt(x, y) != ' ') continue;
+                    if (_screen.CharAt(x - 1, y) != ' ' || _screen.CharAt(x + 1, y) != ' ') continue;
+                    if (_screen.CharAt(x - 2, y) != ' ' || _screen.CharAt(x + 2, y) != ' ') continue;
+                    double r = Rgb.Hash(x, y, bucket);
+                    if (r > 0.055) continue;
+                    double pick = Rgb.Hash(x, y, bucket + 977);
+                    char g = glyphs[(int)(pick * glyphs.Length) % glyphs.Length];
+                    int c = Rgb.FromHsv(Rgb.Hash(x, y, 31) + t * 0.9, 0.55, 0.75 + 0.25 * pick);
+                    _screen.Set(x, y, g, c, _theme.Background);
+                }
+            }
         }
 
         private void DrawBox(double t)
@@ -282,6 +307,7 @@ namespace Burnit
             int w = _boxW, h = _boxH;
 
             string title = " BURNIT " + "·" + " " + _state.Operation + " ";
+            if (th.Rave) title = " ♪ BURNIT ♪ " + _state.Operation + " ♥ ";
             if (_state.DryRun) title += "· DRY RUN ";
 
             StringBuilder top = new StringBuilder();
@@ -313,8 +339,29 @@ namespace Burnit
             bot.Append('╯');
             _screen.Text(0, h - 1, bot.ToString(), th.Panel, th.Background);
 
-            string hint = " ctrl-c aborts ";
+            string hint = th.Rave ? " ♥ ctrl-c aborts ♥ " : " ctrl-c aborts ";
             _screen.Text(w - 2 - hint.Length, h - 1, hint, th.Dim, th.Background);
+
+            if (th.Rave)
+            {
+                // Run a hue chase all the way round the frame.
+                for (int x = 0; x < w; x++)
+                {
+                    int c = Rgb.FromHsv(x / (double)w * 1.5 + t * 1.2, 0.8, 0.95);
+                    if (_screen.CharAt(x, 0) == '─') _screen.Set(x, 0, '─', c, th.Background);
+                    if (_screen.CharAt(x, h - 1) == '─') _screen.Set(x, h - 1, '─', c, th.Background);
+                }
+                for (int y = 1; y < h - 1; y++)
+                {
+                    int c = Rgb.FromHsv(y / (double)h * 1.5 + t * 1.2, 0.8, 0.95);
+                    _screen.Set(0, y, '│', c, th.Background);
+                    _screen.Set(w - 1, y, '│', c, th.Background);
+                }
+                // Title letters each get their own hue.
+                for (int i = 0; i < title.Length && 2 + i < w - 1; i++)
+                    _screen.Set(2 + i, 0, title[i],
+                        Rgb.FromHsv(i * 0.06 + t * 2.0, 0.75, 1.0), th.Background);
+            }
         }
 
         private void DrawPanel()
@@ -374,6 +421,13 @@ namespace Burnit
             {
                 char glyph = i < idx ? '●' : (i == idx ? '◐' : '○');
                 int c = i < idx ? th.Dim : (i == idx ? th.Accent : th.Dim);
+                if (th.Rave)
+                {
+                    glyph = i < idx ? '♥' : (i == idx ? '♦' : '○');
+                    double tt = (DateTime.UtcNow - _t0).TotalSeconds;
+                    if (i == idx) c = Rgb.FromHsv(tt * 2.5, 0.8, 1.0);
+                    else if (i < idx) c = Rgb.FromHsv(i * 0.13 + tt * 0.5, 0.7, 0.8);
+                }
                 if (x + steps[i].Length + 3 >= _boxW - 1) break;
                 _screen.Set(x, y, glyph, c, th.Background);
                 _screen.Text(x + 2, y, steps[i], i == idx ? th.Value : th.Dim, th.Background);
@@ -397,10 +451,18 @@ namespace Burnit
 
             const string eighths = "▏▎▍▌▋▊▉";
 
+            double now = (DateTime.UtcNow - _t0).TotalSeconds;
             for (int i = 0; i < barW; i++)
             {
                 char ch;
                 int fg;
+                if (th.Rave && i < full)
+                {
+                    // Rainbow fill that scrolls, so the bar itself looks like it is moving.
+                    _screen.Set(x + i, y, '█',
+                        Rgb.FromHsv(i / (double)barW * 1.2 - now * 1.6, 0.85, 1.0), th.Background);
+                    continue;
+                }
                 if (i < full) { ch = '█'; fg = th.Accent; }
                 else if (i == full && frac > 0.06)
                 {

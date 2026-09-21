@@ -146,6 +146,23 @@ There are three palettes. `--theme ice`:
 
 ![ice theme](docs/theme-ice.png)
 
+And then there is `--kawaii`:
+
+```bash
+burnit burn ./photos --kawaii
+```
+
+![kawaii mode](docs/kawaii.png)
+
+Rainbow spiral dye, rotating laser spokes, a hue-chasing frame, a scrolling
+rainbow progress bar and a twinkling sparkle field. The disc spins at twice the
+normal rate and everything pulses on a four-to-the-floor beat. `--rave` is an
+alias. The write head still tracks real bytes — it is the same burn underneath,
+just louder.
+
+Glyphs are restricted to what Cascadia Mono actually ships, because font
+fallback substitutes double-width characters and shears the whole grid.
+
 If stdout is not a terminal, or you pass `--plain`, it degrades to plain progress
 lines instead.
 
