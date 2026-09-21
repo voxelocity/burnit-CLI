@@ -85,6 +85,31 @@ burnit burn ./more-files --append       # second session on the same disc
 
 Nothing destructive happens without a confirmation prompt, or an explicit `-y`.
 
+### `burn` vs `audio` — the one that catches everyone
+
+`burn` makes a **data disc**: the files go on the disc as files. `audio` makes a
+**Red Book audio CD**: the music is decoded to raw PCM and written as CD-DA
+tracks.
+
+```bash
+burnit burn  ./music     # a disc holding .flac FILES  -> will not play in a CD player
+burnit audio ./music     # a disc that plays in any CD player
+```
+
+A car stereo, a hi-fi CD player or a CD changer reads CD-DA only. Most cannot
+read MP3, and none read FLAC. If you hand `burn` a set of files that are all
+audio, it will say so before it writes anything.
+
+`audio` takes a folder or a list of files. A folder is expanded to the audio
+files inside it in filename order; pass files individually if you want a
+specific running order.
+
+**For older head units** (BMW E46, anything pre-2006): use CD-R rather than
+CD-RW — many old units cannot read the lower reflectivity of rewritables at all
+— burn at `--speed 16x` or slower, and let it finalise (do not pass
+`--no-finalise`). "Music"/"Audio" CD-Rs work fine; they are ordinary CD-R with a
+flag set, and this tool writes them like any other disc.
+
 ---
 
 ## What it looks like

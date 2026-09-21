@@ -327,6 +327,18 @@ namespace Burnit
                 Out.Field("speed", state.SpeedText);
                 Out.Field("session", o.Close ? "close disc (no more writing)" : "leave disc open for more sessions");
 
+                // A data disc full of audio files is a disc no CD player will play.
+                // Cheap to warn, and the disc is write-once.
+                if (IsAllAudio(o.Inputs))
+                {
+                    Out.Blank();
+                    Out.Warn("every file here is an audio file, and this is a DATA disc.");
+                    Out.Note("  A data disc will not play in a car stereo or a normal CD player —");
+                    Out.Note("  they read Red Book audio CDs only. For a disc that plays, use:");
+                    Out.Note("      burnit audio <files>");
+                    Out.Note("  Carry on only if you meant to store the files as data.");
+                }
+
                 byte[] expected = null;
                 if (o.Verify && !o.DryRun)
                 {
@@ -619,20 +631,21 @@ namespace Burnit
                 Out.Field("media", Media.Describe(media.Type) + " · " + media.StateText);
                 if (Audio.FindFfmpeg() == null)
                     Out.Warn("ffmpeg not on PATH — only 44.1 kHz 16-bit stereo WAV can be read");
-                Out.Note("  decoding " + o.Inputs.Count + " track" + (o.Inputs.Count == 1 ? "" : "s") + "...");
+                List<string> sources = ExpandAudioInputs(o.Inputs);
+                Out.Note("  decoding " + sources.Count + " track" + (sources.Count == 1 ? "" : "s") + "...");
 
                 List<AudioTrack> tracks = new List<AudioTrack>();
                 Dashboard prep = new Dashboard(state, Program.ActiveTheme, Program.Fancy);
                 try
                 {
                     prep.Start();
-                    for (int i = 0; i < o.Inputs.Count; i++)
+                    for (int i = 0; i < sources.Count; i++)
                     {
-                        state.SetProgress(i, o.Inputs.Count);
-                        tracks.Add(Audio.Prepare(o.Inputs[i], tempDir, i + 1, state));
+                        state.SetProgress(i, sources.Count);
+                        tracks.Add(Audio.Prepare(sources[i], tempDir, i + 1, state));
                         if (Program.Cancelled) throw new BurnitException("Cancelled.");
                     }
-                    state.SetProgress(o.Inputs.Count, o.Inputs.Count);
+                    state.SetProgress(sources.Count, sources.Count);
                 }
                 finally { prep.Stop(); }
 
@@ -891,6 +904,80 @@ namespace Burnit
                 throw new BurnitException("This disc is neither blank nor appendable. Erase it, or use a fresh disc.");
             if (!blank && !o.Append && !o.DryRun)
                 Out.Warn("disc already has data; a new session will be appended");
+        }
+
+        /// <summary>
+        /// Turns whatever was on the command line into a track list: a folder becomes
+        /// its audio files in name order, a file stays as it is. Track order is the
+        /// order given, so pass files individually to control the running order.
+        /// </summary>
+        private static List<string> ExpandAudioInputs(IList<string> inputs)
+        {
+            List<string> outList = new List<string>();
+            foreach (string raw in inputs)
+            {
+                string p;
+                try { p = Path.GetFullPath(raw); }
+                catch (Exception) { throw new BurnitException("Not a usable path: " + raw); }
+
+                if (Directory.Exists(p))
+                {
+                    List<string> found = new List<string>();
+                    foreach (string f in Directory.GetFiles(p, "*", SearchOption.TopDirectoryOnly))
+                        if (Array.IndexOf(AudioExtensions, Path.GetExtension(f).ToLowerInvariant()) >= 0)
+                            found.Add(f);
+                    if (found.Count == 0)
+                        throw new BurnitException("No audio files in " + p);
+                    found.Sort(StringComparer.OrdinalIgnoreCase);
+                    outList.AddRange(found);
+                }
+                else if (File.Exists(p))
+                {
+                    outList.Add(p);
+                }
+                else
+                {
+                    throw new BurnitException("Not found: " + raw);
+                }
+            }
+            if (outList.Count == 0)
+                throw new BurnitException("No audio files to burn.");
+            if (outList.Count > 99)
+                throw new BurnitException("An audio CD holds at most 99 tracks; you gave " + outList.Count + ".");
+            return outList;
+        }
+
+        private static readonly string[] AudioExtensions =
+        {
+            ".flac", ".mp3", ".wav", ".m4a", ".aac", ".ogg", ".oga", ".opus",
+            ".wma", ".alac", ".aif", ".aiff", ".ape", ".wv", ".mpc"
+        };
+
+        /// <summary>True when every file being burned is an audio file and there is at least one.</summary>
+        private static bool IsAllAudio(IList<string> inputs)
+        {
+            int seen = 0;
+            foreach (string s in inputs)
+            {
+                string[] files;
+                try
+                {
+                    string p = Path.GetFullPath(s);
+                    if (Directory.Exists(p)) files = Directory.GetFiles(p, "*", SearchOption.AllDirectories);
+                    else if (File.Exists(p)) files = new string[] { p };
+                    else continue;
+                }
+                catch (Exception) { continue; }
+
+                foreach (string f in files)
+                {
+                    string ext = Path.GetExtension(f).ToLowerInvariant();
+                    if (Array.IndexOf(AudioExtensions, ext) < 0) return false;
+                    seen++;
+                    if (seen > 5000) return true;      // don't walk a huge tree forever
+                }
+            }
+            return seen > 0;
         }
 
         private static string Describe(IList<string> inputs)
