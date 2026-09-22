@@ -56,6 +56,21 @@ namespace Burnit
         public bool Present;
         public string Problem;
 
+        /// <summary>A stand-in 80 minute CD-R, for planning a burn with no disc loaded.</summary>
+        public static MediaSnapshot AssumedBlankCd()
+        {
+            MediaSnapshot m = new MediaSnapshot();
+            m.Type = MediaType.CdR;
+            m.State = MediaState.Blank | MediaState.Appendable;
+            m.PhysicallyBlank = true;
+            m.Present = true;
+            m.TotalSectors = 359847;
+            m.FreeSectors = 359847;
+            m.SupportedSpeeds = new int[] { 750, 1199, 1799 };
+            m.CurrentSpeed = 1799;
+            return m;
+        }
+
         public long CapacityBytes { get { return (long)TotalSectors * 2048L; } }
         public long FreeBytes { get { return (long)FreeSectors * 2048L; } }
 

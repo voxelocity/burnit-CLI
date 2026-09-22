@@ -73,7 +73,7 @@ namespace Burnit
         }
     }
 
-    public static class Commands
+    public static partial class Commands
     {
         // ---- drives ---------------------------------------------------------------
 
@@ -598,7 +598,12 @@ namespace Burnit
         {
             if (o.Inputs.Count == 0)
                 throw new BurnitException("Usage: burnit audio <track.mp3|flac|wav>...");
+            return BurnAudioFrom(o, ExpandAudioInputs(o.Inputs), "audio cd");
+        }
 
+        /// <summary>Shared by `audio` and `spotify`; sources are already in running order.</summary>
+        private static int BurnAudioFrom(Options o, List<string> sources, string headline)
+        {
             RecorderInfo info = Devices.Select(o.Drive);
             dynamic rec = Devices.OpenRecorder(info);
             dynamic tao = null;
@@ -613,10 +618,16 @@ namespace Burnit
                 tao.ClientName = Program.ClientName;
 
                 MediaSnapshot media = Devices.Inspect(rec);
+                if (!media.Present && o.DryRun)
+                {
+                    media = MediaSnapshot.AssumedBlankCd();
+                    Out.Note("  no disc loaded — planning against a blank 80 minute CD-R");
+                }
                 if (!Media.IsCd(media.Type))
                     throw new BurnitException("Audio CDs need CD-R or CD-RW media; this drive has "
                         + Media.Describe(media.Type) + " loaded.");
-                RequireWritableMedia(media, o);
+                RequireWritableMedia(media, o, true);
+                RequireBlankForAudio(media, o);
 
                 BurnState state = new BurnState();
                 state.Operation = "audio cd";
@@ -626,12 +637,11 @@ namespace Burnit
                 state.MediaText = Media.Describe(media.Type);
                 state.Step("decode");
 
-                Out.Title(o.DryRun ? "audio cd (dry run)" : "audio cd");
+                Out.Title(o.DryRun ? headline + " (dry run)" : headline);
                 Out.Field("drive", state.DriveText);
                 Out.Field("media", Media.Describe(media.Type) + " · " + media.StateText);
                 if (Audio.FindFfmpeg() == null)
                     Out.Warn("ffmpeg not on PATH — only 44.1 kHz 16-bit stereo WAV can be read");
-                List<string> sources = ExpandAudioInputs(o.Inputs);
                 Out.Note("  decoding " + sources.Count + " track" + (sources.Count == 1 ? "" : "s") + "...");
 
                 List<AudioTrack> tracks = new List<AudioTrack>();
@@ -887,8 +897,16 @@ namespace Burnit
 
         private static void RequireWritableMedia(MediaSnapshot media, Options o)
         {
+            RequireWritableMedia(media, o, false);
+        }
+
+        private static void RequireWritableMedia(MediaSnapshot media, Options o, bool forAudio)
+        {
             if (!media.Present)
+            {
+                if (o.DryRun) return;
                 throw new BurnitException(media.Problem ?? "No disc in the drive.");
+            }
             if ((media.State & MediaState.WriteProtected) != 0)
                 throw new BurnitException("The disc is write-protected.");
             if ((media.State & MediaState.Damaged) != 0)
@@ -902,7 +920,7 @@ namespace Burnit
             bool appendable = (media.State & MediaState.Appendable) != 0;
             if (!blank && !appendable && !o.DryRun)
                 throw new BurnitException("This disc is neither blank nor appendable. Erase it, or use a fresh disc.");
-            if (!blank && !o.Append && !o.DryRun)
+            if (!blank && !o.Append && !o.DryRun && !forAudio)
                 Out.Warn("disc already has data; a new session will be appended");
         }
 
@@ -928,7 +946,7 @@ namespace Burnit
                             found.Add(f);
                     if (found.Count == 0)
                         throw new BurnitException("No audio files in " + p);
-                    found.Sort(StringComparer.OrdinalIgnoreCase);
+                    found.Sort(new NaturalComparer());
                     outList.AddRange(found);
                 }
                 else if (File.Exists(p))
@@ -978,6 +996,26 @@ namespace Burnit
                 }
             }
             return seen > 0;
+        }
+
+        /// <summary>
+        /// Track-at-once needs a blank disc: an audio CD's table of contents covers the
+        /// whole disc, so there is no way to add CD-DA tracks to a disc that already has
+        /// a session. Checked up front, before minutes of decoding.
+        /// </summary>
+        private static void RequireBlankForAudio(MediaSnapshot media, Options o)
+        {
+            if (o.DryRun) return;
+            bool blank = media.PhysicallyBlank || (media.State & MediaState.Blank) != 0;
+            if (blank) return;
+
+            long used = media.CapacityBytes - media.FreeBytes;
+            string msg = "An audio CD has to go on a blank disc, and this one already has a session on it ("
+                + Fmt.Bytes(used) + " used). ";
+            msg += Media.IsRewritable(media.Type)
+                ? "Erase it first:  burnit erase"
+                : "CD-R is write-once, so this disc cannot be reused — put in a blank one.";
+            throw new BurnitException(msg);
         }
 
         private static string Describe(IList<string> inputs)

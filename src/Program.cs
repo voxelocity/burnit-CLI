@@ -24,6 +24,15 @@ namespace Burnit
         public bool Plain;
         public string ThemeName = "amber";
         public FsiFileSystems FileSystems = FsiFileSystems.None;   // None => let IMAPI choose
+        public string Keep;          // spotify: where to leave the downloads
+        public bool AsData;          // spotify: data disc of files instead of an audio CD
+
+        public Options Clone()
+        {
+            Options c = (Options)MemberwiseClone();
+            c.Inputs = new List<string>(Inputs);
+            return c;
+        }
     }
 
     public static class Program
@@ -77,6 +86,7 @@ namespace Burnit
                     case "drives": return Commands.Drives(o);
                     case "info": return Commands.Info(o);
                     case "burn": return Commands.BurnData(o);
+                    case "spotify": return Commands.Spotify(o);
                     case "iso": return Commands.BurnIso(o);
                     case "audio": return Commands.BurnAudio(o);
                     case "erase": return Commands.Erase(o);
@@ -166,6 +176,8 @@ namespace Burnit
                     case "--kawaii":
                     case "--rave": o.ThemeName = "kawaii"; break;
                     case "--fs": o.FileSystems = ParseFs(Next(args, ref i, "--fs")); break;
+                    case "--keep": o.Keep = Next(args, ref i, "--keep"); break;
+                    case "--data": o.AsData = true; break;
                     case "-h":
                     case "--help": o.Command = "help"; break;
                     default:
@@ -223,6 +235,7 @@ namespace Burnit
             Console.WriteLine("    burn <path>...            burn files and folders as a data disc");
             Console.WriteLine("    iso <image.iso>           write an existing disc image");
             Console.WriteLine("    audio <track>...          burn a Red Book audio CD (ffmpeg decodes)");
+            Console.WriteLine("    spotify <url|search>...   fetch with spotdl, then burn it as an audio CD");
             Console.WriteLine("    image <out.iso> <path>... build an ISO file without burning anything");
             Console.WriteLine("    erase                     blank a CD-RW / DVD-RW / BD-RE");
             Console.WriteLine("    eject | close             open or close the tray");
@@ -236,6 +249,8 @@ namespace Burnit
             Console.WriteLine("        --append              add a session to a disc that already has data");
             Console.WriteLine("        --fs <iso,joliet,udf> filesystems to generate");
             Console.WriteLine("        --no-finalise         audio: leave the disc open");
+            Console.WriteLine("        --keep <dir>          spotify: keep the downloads here");
+            Console.WriteLine("        --data                spotify: burn the files as a data disc");
             Console.WriteLine("        --full                erase: full blank instead of quick");
             Console.WriteLine("        --eject               eject when finished");
             Console.WriteLine("        --dry-run             do everything except fire the laser");
@@ -249,6 +264,7 @@ namespace Burnit
             Console.WriteLine(col(t.Dim, "    burnit burn ./photos --label HOLIDAY --verify --eject"));
             Console.WriteLine(col(t.Dim, "    burnit iso ./debian.iso --speed 8x --verify"));
             Console.WriteLine(col(t.Dim, "    burnit audio *.flac --speed max"));
+            Console.WriteLine(col(t.Dim, "    burnit spotify https://open.spotify.com/playlist/... --speed 16x"));
             Console.WriteLine(col(t.Dim, "    burnit image out.iso ./project     # no disc needed"));
             Console.WriteLine();
         }

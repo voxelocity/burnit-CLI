@@ -50,6 +50,7 @@ burnit info                      everything the drive knows about the loaded dis
 burnit burn <path>...            burn files and folders as a data disc
 burnit iso <image.iso>           write an existing disc image
 burnit audio <track>...          burn a Red Book audio CD
+burnit spotify <url|search>...   fetch with spotdl, then burn it as an audio CD
 burnit image <out.iso> <path>... build an ISO file without burning anything
 burnit erase                     blank a CD-RW / DVD-RW / BD-RE
 burnit eject | close             open or close the tray
@@ -103,6 +104,29 @@ audio, it will say so before it writes anything.
 `audio` takes a folder or a list of files. A folder is expanded to the audio
 files inside it in filename order; pass files individually if you want a
 specific running order.
+
+### Spotify
+
+`burnit spotify` hands a URL or a search to [spotdl](https://github.com/spotDL/spotify-downloader),
+then burns what comes back as an audio CD:
+
+```bash
+burnit spotify https://open.spotify.com/playlist/37i9dQ... --speed 16x --eject
+burnit spotify "kettama yosemite" --keep ./downloads
+burnit spotify <album-url> --data --label MIXTAPE     # data disc of MP3s instead
+```
+
+spotdl runs with its stdio inherited, so you see its own progress live. Track
+order comes from the playlist: files are named with their list position and
+sorted numerically, so track 10 lands after track 2 rather than after track 1.
+
+`--keep <dir>` leaves the downloads behind instead of using a temp folder; when
+that folder already contains music, only what this run fetched gets burned.
+`--data` writes the files as a data disc — useful for a head unit that reads
+MP3, useless for one that does not.
+
+Needs `pip install spotdl` and ffmpeg on `PATH`. A `.cmd`/`.bat` shim (pipx,
+conda) is resolved correctly, not just `spotdl.exe`.
 
 **For older head units** (BMW E46, anything pre-2006): use CD-R rather than
 CD-RW — many old units cannot read the lower reflectivity of rewritables at all
